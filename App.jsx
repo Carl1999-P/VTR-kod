@@ -24,7 +24,7 @@ const BLOCKS = [
     id: 'ytanv',
     label: 'Yttre användning',
     options: ['GODS', 'TAXI', 'UR', 'TRAFIKSKOL', 'AMBULANS'],
-    type: 'field',
+    type: 'multi',
     field: 'YTRANVSATT',
   },
   {
@@ -38,7 +38,7 @@ const BLOCKS = [
     id: 'regnr',
     label: 'Registreringsnummer',
     options: [],
-    type: 'input',
+    type: 'multiinput',
     field: 'REGNR',
   },
 ];
@@ -47,12 +47,18 @@ export default function App() {
   const [blocks, setBlocks] = useState([]);
 
   const addBlock = (block) => {
-    setBlocks([...blocks, { ...block, value: '' }]);
+    setBlocks([...blocks, { ...block, value: [], negate: false }]);
   };
 
   const updateValue = (index, value) => {
     const updated = [...blocks];
     updated[index].value = value;
+    setBlocks(updated);
+  };
+
+  const updateNegate = (index, negate) => {
+    const updated = [...blocks];
+    updated[index].negate = negate;
     setBlocks(updated);
   };
 
@@ -64,14 +70,24 @@ export default function App() {
 
   const generateCode = () => {
     return blocks
-      .filter(b => b.value)
+      .filter(b => b.value && b.value.length > 0)
       .map(b => {
-        if (b.type === 'tag') return `#${b.value}#`;
-        if (b.type === 'field') return `${b.field} in('${b.value}')`;
-        if (b.type === 'input') return `${b.field} in('${b.value}')`;
+        if (b.type === 'tag') return `${b.negate ? '!' : ''}#${b.value[0]}#`;
+        if (b.type === 'field' || b.type === 'multi') {
+          const valList = b.value.map(v => `'${v}'`).join(',');
+          return `${b.field} ${b.negate ? '!in' : 'in'}(${valList})`;
+        }
+        if (b.type === 'multiinput') {
+          const valList = b.value.map(v => `'${v}'`).join(',');
+          return `${b.field} ${b.negate ? '!in' : 'in'}(${valList})`;
+        }
         return '';
       })
       .join(' and ');
+  };
+
+  const handleInputList = (value) => {
+    return value.split(',').map(v => v.trim()).filter(v => v);
   };
 
   return (
@@ -92,27 +108,40 @@ export default function App() {
       </div>
 
       {blocks.map((block, index) => (
-        <div key={index} className="bg-gray-100 p-3 rounded flex gap-2 items-center mt-2">
+        <div key={index} className="bg-gray-100 p-3 rounded flex gap-2 items-center flex-wrap mt-2">
           <strong>{block.label}:</strong>
-          {block.type === 'input' ? (
+
+          {block.type === 'multiinput' ? (
             <input
               className="border px-2 py-1"
-              placeholder="Ange..."
-              value={block.value}
-              onChange={(e) => updateValue(index, e.target.value)}
+              placeholder="REGNR1, REGNR2, ..."
+              value={block.value.join(', ')}
+              onChange={(e) => updateValue(index, handleInputList(e.target.value))}
             />
           ) : (
             <select
+              multiple={block.type === 'multi'}
               className="border px-2 py-1"
               value={block.value}
-              onChange={(e) => updateValue(index, e.target.value)}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                updateValue(index, selected);
+              }}
             >
-              <option value="">- Välj -</option>
               {block.options.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           )}
+
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={block.negate}
+              onChange={(e) => updateNegate(index, e.target.checked)}
+            /> inte
+          </label>
+
           <button
             onClick={() => removeBlock(index)}
             className="text-sm text-red-500"
