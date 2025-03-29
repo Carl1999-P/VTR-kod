@@ -1,116 +1,105 @@
-import React, { useState } from "react";
-import "./index.css";
+import React, { useState } from 'react';
+import './index.css';
 
-const validateRegNr = (input) => {
-  const parts = input.toUpperCase().trim().split(/\s+/);
-  const valid = [];
-  const invalid = [];
+const REGNR_PATTERN = /^[A-Z]{3}\d{3}$|^[A-Z]{3}\d{2}[A-Z]{1}$/;
 
-  parts.forEach((reg) => {
-    if (/^[A-Z]{3}[0-9]{3}$/.test(reg) || /^[A-Z]{3}[0-9]{2}[A-Z]{1}$/.test(reg)) {
-      valid.push(reg);
+const validateRegNumber = (reg) => REGNR_PATTERN.test(reg.toUpperCase());
+
+const initialBlocks = [];
+
+function App() {
+  const [blocks, setBlocks] = useState(initialBlocks);
+  const [input, setInput] = useState('');
+  const [warning, setWarning] = useState('');
+
+  const handleAddBlock = () => {
+    if (!input) return;
+
+    const inputs = input.trim().toUpperCase().split(/\s+/);
+    const validInputs = [];
+    const invalidInputs = [];
+
+    inputs.forEach(reg => {
+      if (validateRegNumber(reg)) {
+        validInputs.push(reg);
+      } else {
+        invalidInputs.push(reg);
+      }
+    });
+
+    if (invalidInputs.length > 0) {
+      setWarning(`Ogiltigt regnr: ${invalidInputs.join(', ')}`);
     } else {
-      invalid.push(reg);
+      setWarning('');
     }
-  });
 
-  return { valid, invalid };
-};
-
-const DraggableBlock = ({ label, value, onRemove, dragHandleProps }) => (
-  <div className="draggable-block">
-    <span className="drag-icon" {...dragHandleProps}>☰</span>
-    <span>{label}</span>
-    <span className="code-value">{value}</span>
-    <button onClick={onRemove}>❌</button>
-  </div>
-);
-
-export default function App() {
-  const [blocks, setBlocks] = useState([]);
-  const [regInput, setRegInput] = useState("");
-  const [invalidRegs, setInvalidRegs] = useState([]);
-
-  const handleAddRegBlock = () => {
-    const { valid, invalid } = validateRegNr(regInput);
-    setInvalidRegs(invalid);
-
-    if (valid.length > 0) {
-      setBlocks([
-        ...blocks,
-        {
-          id: Date.now(),
-          label: "REGNR",
-          value: `in('${valid.join("','")}')`,
-        },
-      ]);
-      setRegInput("");
+    if (validInputs.length > 0) {
+      const newBlock = {
+        id: Date.now(),
+        type: 'REGNR',
+        values: validInputs,
+      };
+      setBlocks([...blocks, newBlock]);
+      setInput('');
     }
   };
 
-  const handleRemoveBlock = (id) => {
-    setBlocks(blocks.filter((b) => b.id !== id));
+  const handleDragStart = (e, index) => {
+    e.dataTransfer.setData('dragIndex', index);
   };
 
-  const handleDragStart = (index) => (e) => {
-    e.dataTransfer.setData("text/plain", index);
+  const handleDrop = (e, dropIndex) => {
+    const dragIndex = e.dataTransfer.getData('dragIndex');
+    if (dragIndex === dropIndex) return;
+
+    const updatedBlocks = [...blocks];
+    const [moved] = updatedBlocks.splice(dragIndex, 1);
+    updatedBlocks.splice(dropIndex, 0, moved);
+    setBlocks(updatedBlocks);
   };
 
-  const handleDrop = (index) => (e) => {
-    const fromIndex = e.dataTransfer.getData("text/plain");
-    if (fromIndex === "") return;
-
-    const updated = [...blocks];
-    const movedItem = updated.splice(fromIndex, 1)[0];
-    updated.splice(index, 0, movedItem);
-    setBlocks(updated);
+  const handleDragOver = (e) => {
+    e.preventDefault();
   };
 
   return (
     <div className="app">
       <h1>Kodblock Builder 🚗</h1>
-
-      <div className="regnr-input">
+      <div>
         <input
           type="text"
-          value={regInput}
-          placeholder="Ange registreringsnummer (ex: ABC123 XYZ999)"
-          onChange={(e) => setRegInput(e.target.value)}
+          value={input}
+          onChange={(e) => setInput(e.target.value.toUpperCase())}
+          placeholder="Ange registreringsnummer"
         />
-        <button onClick={handleAddRegBlock}>+ Lägg till REGNR</button>
+        <button onClick={handleAddBlock}>+ Lägg till REGNR</button>
+        {warning && <div className="warning">{warning}</div>}
       </div>
 
-      {invalidRegs.length > 0 && (
-        <div className="warning">
-          ❗ Ogiltiga regnummer: {invalidRegs.join(", ")}
-        </div>
-      )}
-
-      <div className="block-list">
+      <div>
         {blocks.map((block, index) => (
           <div
             key={block.id}
-            className="block-wrapper"
+            className="draggable-block"
             draggable
-            onDragStart={handleDragStart(index)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop(index)}
+            onDragStart={(e) => handleDragStart(e, index)}
+            onDrop={(e) => handleDrop(e, index)}
+            onDragOver={handleDragOver}
           >
-            <DraggableBlock
-              {...block}
-              dragHandleProps={{ onMouseDown: (e) => e.stopPropagation() }}
-              onRemove={() => handleRemoveBlock(block.id)}
-            />
+            <span className="drag-icon">☰</span>
+            <strong>{block.type}:</strong> in({block.values.map(v => `'${v}'`).join(', ')})
           </div>
         ))}
       </div>
 
-      <div className="generated-code">
-        <h3>Genererad kod:</h3>
-        <code>
-          {blocks.map((b) => `${b.label} ${b.value}`).join(" AND ")}
-        </code>
+      <div style={{ marginTop: '20px' }}>
+        <strong>Genererad kod:</strong>
+        <div style={{ marginTop: '8px' }}>
+          {blocks.map(block => `${block.type} in(${block.values.map(v => `'${v}'`).join(', ')})`).join(' AND ')}
+        </div>
       </div>
     </div>
   );
 }
+
+export default App;
