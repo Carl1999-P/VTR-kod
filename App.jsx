@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const BLOCKS = [
   { id: 'vehicle', label: 'Fordonstyp', options: ['Personbil', 'Lastbil', 'Lätt lastbil', 'Släp', 'Lätt släp', 'Buss', 'Ambulans', 'Moped'], type: 'tag' },
@@ -11,17 +14,39 @@ const BLOCKS = [
   { id: 'totalvikt', label: 'Totalvikt (kg)', options: [], type: 'numeric', field: 'TOTALVIKTSANKT' },
 ];
 
+function SortableBlock({ block, index, render, id }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {render(block, index)}
+    </div>
+  );
+}
+
 export default function App() {
   const [blocks, setBlocks] = useState([]);
+  const [regnrWarning, setRegnrWarning] = useState(false);
 
   const addBlock = (block) => {
-    setBlocks([...blocks, { ...block, value: block.type === 'checkbox' ? [] : '', negate: false, operator: '=' }]);
+    setBlocks([...blocks, { ...block, id: Date.now(), value: block.type === 'checkbox' ? [] : '', negate: false, operator: '=' }]);
   };
 
   const updateValue = (index, value) => {
     const updated = [...blocks];
     updated[index].value = value;
     setBlocks(updated);
+
+    if (updated[index].field === 'REGNR') {
+      const entries = value.toUpperCase().split(/\s+/).map(v => v.trim());
+      const allValid = entries.every(v => /^[A-Z]{3}\d{3}$/.test(v) || /^[A-Z]{3}\d{2}[A-Z]{1}$/.test(v));
+      setRegnrWarning(!allValid);
+    }
   };
 
   const updateNegate = (index, negate) => {
@@ -40,6 +65,15 @@ export default function App() {
     const updated = [...blocks];
     updated.splice(index, 1);
     setBlocks(updated);
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      const oldIndex = blocks.findIndex(b => b.id === active.id);
+      const newIndex = blocks.findIndex(b => b.id === over?.id);
+      setBlocks(arrayMove(blocks, oldIndex, newIndex));
+    }
   };
 
   const handleInputList = (value) => {
@@ -79,6 +113,80 @@ export default function App() {
       .join(' and ');
   };
 
+  const renderBlock = (block, index) => (
+    <div className="bg-gray-100 p-3 rounded flex flex-wrap gap-2 items-center mt-2">
+      <strong>{block.label}:</strong>
+
+      {block.type === 'multiinput' ? (
+        <div className="flex flex-col">
+          <input
+            className="border px-2 py-1"
+            placeholder="ABC123 XYZ999 ..."
+            value={block.value}
+            onChange={(e) => updateValue(index, e.target.value)}
+          />
+          {regnrWarning && <span className="text-red-600 text-xs">⚠ Ogiltigt regnummer angivet</span>}
+        </div>
+      ) : block.type === 'checkbox' ? (
+        <div className="flex gap-1">
+          {block.options.map(opt => (
+            <button
+              key={opt}
+              onClick={() => toggleCheckboxValue(index, opt)}
+              className={`px-2 py-1 rounded text-sm border ${blocks[index].value.includes(opt) ? 'bg-blue-600 text-white' : 'bg-white text-gray-800'}`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      ) : block.type === 'numeric' ? (
+        <>
+          <select value={block.operator} onChange={(e) => updateOperator(index, e.target.value)} className="border px-2 py-1">
+            <option value="=">=</option>
+            <option value=">">&gt;</option>
+            <option value="<">&lt;</option>
+            <option value=">=">&ge;</option>
+            <option value="<=">&le;</option>
+          </select>
+          <input
+            type="number"
+            className="border px-2 py-1"
+            value={block.value}
+            onChange={(e) => updateValue(index, e.target.value)}
+          />
+        </>
+      ) : (
+        <select
+          className="border px-2 py-1"
+          value={block.value}
+          onChange={(e) => updateValue(index, e.target.value)}
+        >
+          <option value="">- Välj -</option>
+          {block.options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      )}
+
+      {(block.type !== 'tag' && block.type !== 'numeric') && (
+        <label className="flex items-center gap-1 text-sm">
+          <input
+            type="checkbox"
+            checked={block.negate}
+            onChange={(e) => updateNegate(index, e.target.checked)}
+          /> inte
+        </label>
+      )}
+
+      <button
+        onClick={() => removeBlock(index)}
+        className="text-sm text-red-500"
+      >
+        Ta bort
+      </button>
+    </div>
+  );
+
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">Kodblock Builder 🚗</h1>
@@ -96,76 +204,19 @@ export default function App() {
         ))}
       </div>
 
-      {blocks.map((block, index) => (
-        <div key={index} className="bg-gray-100 p-3 rounded flex flex-wrap gap-2 items-center mt-2">
-          <strong>{block.label}:</strong>
-
-          {block.type === 'multiinput' ? (
-            <input
-              className="border px-2 py-1"
-              placeholder="ABC123 XYZ999 ..."
-              value={block.value}
-              onChange={(e) => updateValue(index, e.target.value)}
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
+          {blocks.map((block, index) => (
+            <SortableBlock
+              key={block.id}
+              id={block.id}
+              block={block}
+              index={index}
+              render={renderBlock}
             />
-          ) : block.type === 'checkbox' ? (
-            <div className="flex gap-1">
-              {block.options.map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => toggleCheckboxValue(index, opt)}
-                  className={`px-2 py-1 rounded text-sm border ${blocks[index].value.includes(opt) ? 'bg-blue-600 text-white' : 'bg-white text-gray-800'}`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          ) : block.type === 'numeric' ? (
-            <>
-              <select value={block.operator} onChange={(e) => updateOperator(index, e.target.value)} className="border px-2 py-1">
-                <option value="=">=</option>
-                <option value=">">&gt;</option>
-                <option value="<">&lt;</option>
-                <option value=">=">&ge;</option>
-                <option value="<=">&le;</option>
-              </select>
-              <input
-                type="number"
-                className="border px-2 py-1"
-                value={block.value}
-                onChange={(e) => updateValue(index, e.target.value)}
-              />
-            </>
-          ) : (
-            <select
-              className="border px-2 py-1"
-              value={block.value}
-              onChange={(e) => updateValue(index, e.target.value)}
-            >
-              <option value="">- Välj -</option>
-              {block.options.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          )}
-
-          {(block.type !== 'tag' && block.type !== 'numeric') && (
-            <label className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                checked={block.negate}
-                onChange={(e) => updateNegate(index, e.target.checked)}
-              /> inte
-            </label>
-          )}
-
-          <button
-            onClick={() => removeBlock(index)}
-            className="text-sm text-red-500"
-          >
-            Ta bort
-          </button>
-        </div>
-      ))}
+          ))}
+        </SortableContext>
+      </DndContext>
 
       <div className="bg-white border mt-6 p-3 rounded shadow text-sm">
         <strong>Genererad kod:</strong><br />
