@@ -1,10 +1,26 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-.drag-icon {
-  cursor: grab;
+body {
+  font-family: Arial, sans-serif;
+  padding: 20px;
+  background-color: #fff;
+  color: #222;
+}
+
+input[type="text"] {
+  padding: 8px;
+  font-size: 16px;
+  width: 250px;
   margin-right: 8px;
-  user-select: none;
+}
+
+button {
+  padding: 8px 12px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.warning {
+  color: red;
+  margin-top: 8px;
 }
 
 .draggable-block {
@@ -14,14 +30,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-top: 10px;
+  cursor: grab;
 }
 
-.block-wrapper {
-  margin-bottom: 8px;
-}
-
-.warning {
-  color: red;
-  margin-top: 8px;
+.drag-icon {
+  font-size: 18px;
+  user-select: none;
 }
