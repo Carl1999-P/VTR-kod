@@ -43,7 +43,11 @@ export default function App() {
   };
 
   const handleInputList = (value) => {
-    return value.split(/\s+/).map(v => v.trim()).filter(v => v);
+    return value
+      .toUpperCase()
+      .split(/\s+/)
+      .map(v => v.trim())
+      .filter(v => /^[A-Z]{3}\d{3}$/.test(v) || /^[A-Z]{3}\d{2}[A-Z]{1}$/.test(v));
   };
 
   const toggleCheckboxValue = (blockIndex, val) => {
@@ -144,7 +148,7 @@ export default function App() {
             </select>
           )}
 
-          {(block.type !== 'tag') && (
+          {(block.type !== 'tag' && block.type !== 'numeric') && (
             <label className="flex items-center gap-1 text-sm">
               <input
                 type="checkbox"
